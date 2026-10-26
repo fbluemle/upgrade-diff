@@ -188,6 +188,11 @@
   dependencies:
     undici-types "~6.21.0"
 
+"@types/semver@^7.8.0":
+  version "7.8.0"
+  resolved "https://registry.yarnpkg.com/@types/semver/-/semver-7.8.0.tgz#0bfe3ec51f5e9615bc317174cd5b88ea08b7fc2f"
+  integrity sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==
+
 "@typescript/typescript-aix-ppc64@7.0.2":
   version "7.0.2"
   resolved "https://registry.yarnpkg.com/@typescript/typescript-aix-ppc64/-/typescript-aix-ppc64-7.0.2.tgz#cdc7ce81d60f1e09034960ddfb1fb880d7a776b6"
@@ -533,6 +538,11 @@ rolldown@~1.2.14:
     "@rolldown/binding-openharmony-arm64" "1.2.15"
     "@rolldown/binding-win32-arm64-msvc" "1.2.15"
     "@rolldown/binding-win32-x64-msvc" "1.2.15"
+
+semver@^7.8.5:
+  version "7.8.5"
+  resolved "https://registry.yarnpkg.com/semver/-/semver-7.8.5.tgz#39b646037dd50c14fb451e7e4cac58ed8b863f69"
+  integrity sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==
 
 siginfo@^2.0.0:
   version "2.0.0"
