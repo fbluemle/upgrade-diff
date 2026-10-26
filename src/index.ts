@@ -10,6 +10,13 @@ export {
   readRanges,
 } from './outdated';
 export {
+  type TableOptions,
+  groupPackages,
+  renderLegend,
+  renderList,
+  renderTable,
+} from './table';
+export {
   type Bump,
   type DiffVariant,
   type VariantLabel,

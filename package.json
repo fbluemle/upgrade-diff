@@ -1,16 +1,46 @@
 {
   "name": "upgrade-diff",
   "version": "0.0.1",
+  "description": "Interactive diff viewer for outdated npm dependencies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "upgrade-diff": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "biome check .",
     "test": "vitest run"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fbluemle/upgrade-diff.git"
+  },
+  "keywords": [
+    "diff",
+    "dependencies",
+    "interactive",
+    "npm",
+    "outdated",
+    "upgrade",
+    "upgrade-interactive",
+    "yarn"
+  ],
   "author": "Frieder Bluemle <frieder.bluemle@gmail.com>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fbluemle/upgrade-diff/issues"
+  },
+  "homepage": "https://github.com/fbluemle/upgrade-diff",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1",
     "semver": "^7.8.5"
   },
   "devDependencies": {
