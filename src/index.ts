@@ -1,3 +1,4 @@
+export { type DiffOptions, buildNpmDiffArgs, findOnPath } from './diff';
 export {
   DEP_TYPES,
   type DepType,

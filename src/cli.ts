@@ -4,8 +4,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { InvalidArgumentError, program } from 'commander';
 import pc from 'picocolors';
+import { showDiff } from './diff';
 import { readOutdated } from './outdated';
-import { renderList } from './table';
+import { selectPackage, selectVariant } from './prompt';
+import { UP_TO_DATE, renderList } from './table';
 import { buildVariants } from './variants';
 
 const packageJson = JSON.parse(
@@ -58,6 +60,31 @@ async function main(): Promise<void> {
   if (listOnly) {
     console.log(renderList(packages, skipped, pc).join('\n'));
     return;
+  }
+  if (packages.length === 0) {
+    console.log(UP_TO_DATE);
+    return;
+  }
+
+  let cursor = 0;
+  for (;;) {
+    const pick = await selectPackage(packages, cursor, skipped);
+    if (!pick) {
+      return;
+    }
+    cursor = pick.index;
+    const variants = buildVariants(pick.package);
+    const variant =
+      variants.length === 1
+        ? variants[0]
+        : await selectVariant(pick.package, variants);
+    if (!variant) {
+      continue;
+    }
+    await showDiff(dir, pick.package.name, variant, {
+      unified: options.unified,
+      nameOnly: options.nameOnly,
+    });
   }
 }
 
