@@ -1,0 +1,46 @@
+name: publish
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "Release Type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+jobs:
+  publish:
+    if: ${{ !github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      - name: Set up Git user
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: yarn --frozen-lockfile
+      - run: yarn build
+      - run: yarn test
+      - run: npm version ${{ github.event.inputs.type }}
+      - run: npm publish
+      - run: echo "VERSION=$(npm pkg get version | xargs)" >> $GITHUB_ENV
+      - run: git push origin HEAD --follow-tags
+      - run: gh release create v${{ env.VERSION }} --generate-notes -t ${{ env.VERSION }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: fbactions/comment-released-prs@v1
+        with:
+          tag: v${{ env.VERSION }}
