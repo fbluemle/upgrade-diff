@@ -39,8 +39,27 @@ differ:
   ← back
 ```
 
-The diff opens in `less`. Quit the pager and the list is back with the
-cursor where it was; press `q` to leave.
+Then choose which of the changed files to see. Each top-level directory is
+offered on its own, so transpiled output such as `dist/` can be skipped,
+and `*.d.ts` narrows the diff to type declarations, a readable summary of
+API changes even when the rest is build output:
+
+```
+? commander 11.0.0 → 14.0.3: choose files
+❯ all               12 files
+  lib/               6 files
+  typings/           1 file
+  *.d.ts             1 file    (types only)
+  top-level files    5 files   (index.js, package-support.json, package.json, ...)
+  ← back
+```
+
+The menu is skipped when there is nothing to narrow down, such as when all
+changed files are in one directory.
+
+The diff opens in `less`. Quit the pager and the file menu is back with the
+cursor where it was; `q` goes back to the package list, and `q` there
+leaves.
 
 ## Usage
 
@@ -64,7 +83,7 @@ not a terminal, the list is printed as with `--list`.
 | `[dir]`             | Project directory (default: current directory) |
 | `-l, --list`        | Print the list and exit without prompting      |
 | `-u, --unified <n>` | Number of context lines in the diff            |
-| `--name-only`       | Show only the names of changed files           |
+| `--name-only`       | Show only the names of changed files, no menu  |
 
 ### Keys
 

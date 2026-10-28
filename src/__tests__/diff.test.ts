@@ -2,7 +2,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildNpmDiffArgs, findOnPath } from '../diff';
+import { buildNpmDiffArgs, findOnPath, listChangedFiles } from '../diff';
+import type { Runner } from '../outdated';
 
 describe('buildNpmDiffArgs', () => {
   it('diffs two published versions with the requested options', () => {
@@ -40,5 +41,30 @@ describe('findOnPath', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('listChangedFiles', () => {
+  it('lists the changed files from npm diff --diff-name-only', async () => {
+    const calls: string[][] = [];
+    const run: Runner = async (args) => {
+      calls.push(args);
+      return { stdout: 'lib/a.js\nREADME.md\n', stderr: '', code: 0 };
+    };
+    const pair = { from: '1.0.0', to: '2.0.0' };
+    expect(await listChangedFiles('/x', 'pkg', pair, run)).toEqual([
+      'lib/a.js',
+      'README.md',
+    ]);
+    expect(calls).toEqual([
+      ['diff', '--diff=pkg@1.0.0', '--diff=pkg@2.0.0', '--diff-name-only'],
+    ]);
+  });
+
+  it('rejects when npm diff fails', async () => {
+    const run: Runner = async () => ({ stdout: '', stderr: 'E404', code: 1 });
+    await expect(
+      listChangedFiles('/x', 'pkg', { from: '1.0.0', to: '2.0.0' }, run),
+    ).rejects.toThrow('E404');
   });
 });

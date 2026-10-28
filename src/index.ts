@@ -1,4 +1,19 @@
-export { type DiffOptions, buildNpmDiffArgs, findOnPath } from './diff';
+export {
+  type DiffOptions,
+  type VersionPair,
+  buildNpmDiffArgs,
+  findOnPath,
+  listChangedFiles,
+} from './diff';
+export {
+  type FileGroup,
+  type FileGroupKind,
+  filterDiff,
+  groupFiles,
+  hasChoice,
+  headerFile,
+  parseNameOnly,
+} from './files';
 export {
   DEP_TYPES,
   type DepType,
