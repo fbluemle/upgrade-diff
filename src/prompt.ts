@@ -11,6 +11,8 @@ import {
   useState,
 } from '@inquirer/core';
 import pc from 'picocolors';
+import type { VersionPair } from './diff';
+import type { FileGroup } from './files';
 import type { OutdatedPackage } from './outdated';
 import {
   type Colors,
@@ -183,6 +185,120 @@ export async function selectVariant(
   try {
     return await variantPrompt(
       { pkg, variants, colors: pc },
+      { clearPromptOnDone: true },
+    );
+  } catch (err) {
+    if (err instanceof ExitPromptError) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+export interface FileGroupPick {
+  /** Position of the group, to restore the cursor later */
+  index: number;
+  group: FileGroup;
+}
+
+/** Top-level files named in the group note before it is cut short */
+const MAX_NAMED_FILES = 3;
+
+function groupNote(group: FileGroup): string {
+  switch (group.kind) {
+    case 'types':
+      return '(types only)';
+    case 'top': {
+      const names = group.files.slice(0, MAX_NAMED_FILES).join(', ');
+      return group.files.length > MAX_NAMED_FILES
+        ? `(${names}, ...)`
+        : `(${names})`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** Menu rows for the file groups, without the cursor column */
+export function renderFileGroups(groups: FileGroup[], c: Colors): string[] {
+  const labelWidth = Math.max(...groups.map((g) => g.label.length));
+  const countWidth = Math.max(
+    ...groups.map((g) => String(g.files.length).length),
+  );
+  return groups.map((group) => {
+    const n = group.files.length;
+    const count = `${String(n).padStart(countWidth)} ${n === 1 ? 'file ' : 'files'}`;
+    const note = groupNote(group);
+    const row = `${group.label.padEnd(labelWidth)}   ${count}`;
+    return note ? `${row}   ${c.dim(note)}` : row.trimEnd();
+  });
+}
+
+interface FileGroupPromptConfig {
+  title: string;
+  groups: FileGroup[];
+  cursor: number;
+  colors: Colors;
+}
+
+const fileGroupPrompt = createPrompt<
+  FileGroupPick | null,
+  FileGroupPromptConfig
+>((config, done) => {
+  const { groups, colors: c } = config;
+  const backIndex = groups.length;
+  const [cursor, setCursor] = useState(
+    Math.max(0, Math.min(config.cursor, backIndex)),
+  );
+  const prefix = usePrefix({});
+
+  useKeypress((key) => {
+    if (isEnterKey(key)) {
+      done(
+        cursor === backIndex ? null : { index: cursor, group: groups[cursor] },
+      );
+    } else if (isQuitKey(key)) {
+      done(null);
+    } else if (isPrevKey(key)) {
+      setCursor(Math.max(0, cursor - 1));
+    } else if (isNextKey(key)) {
+      setCursor(Math.min(backIndex, cursor + 1));
+    }
+  });
+
+  const rows = renderFileGroups(groups, c).map(
+    (row, i) => `${i === cursor ? CURSOR : NO_CURSOR}${row}`,
+  );
+  rows.push(`${cursor === backIndex ? CURSOR : NO_CURSOR}← back`);
+  const page = usePagination({
+    items: rows,
+    active: cursor,
+    renderItem: ({ item }) => item,
+    pageSize: pageSize(),
+    loop: false,
+  });
+
+  return `${prefix} ${c.bold(config.title)}\n${page}`;
+});
+
+/**
+ * Let the user pick which changed files of a diff to show. Resolves with
+ * null on back, q, escape, or ctrl-c.
+ */
+export async function selectFileGroup(
+  name: string,
+  { from, to }: VersionPair,
+  groups: FileGroup[],
+  cursor = 0,
+): Promise<FileGroupPick | null> {
+  try {
+    return await fileGroupPrompt(
+      {
+        title: `${name} ${from} → ${to}: choose files`,
+        groups,
+        cursor,
+        colors: pc,
+      },
       { clearPromptOnDone: true },
     );
   } catch (err) {
