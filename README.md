@@ -42,6 +42,22 @@ differ:
 The diff opens in `less`. Quit the pager and the list is back with the
 cursor where it was; press `q` to leave.
 
+To see only part of a diff, select with `f` instead of `enter`, in the
+package list or the diff menu. The changed files are then offered in
+groups, so transpiled output such as `dist/` can be skipped, and `*.d.ts`
+narrows the diff to type declarations, a readable summary of API changes
+even when the rest is build output:
+
+```
+? commander 11.0.0 → 14.0.3: choose files
+❯ all               12 files
+  lib/               6 files
+  typings/           1 file
+  *.d.ts             1 file
+  top-level files    5 files
+  ← back
+```
+
 ## Usage
 
 ```bash
@@ -73,6 +89,7 @@ not a terminal, the list is printed as with `--list`.
 | `↑`, `k`             | Previous package                    |
 | `↓`, `j`             | Next package                        |
 | `enter`              | Select                              |
+| `f`                  | Select and choose files to diff     |
 | `q`, `esc`, `ctrl-c` | Back, or quit from the package list |
 
 ## Requirements

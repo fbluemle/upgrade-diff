@@ -4,11 +4,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { InvalidArgumentError, program } from 'commander';
 import pc from 'picocolors';
-import { showDiff } from './diff';
+import { type DiffOptions, listChangedFiles, showDiff } from './diff';
+import { groupFiles } from './files';
 import { readOutdated } from './outdated';
-import { selectPackage, selectVariant } from './prompt';
+import { selectFileGroup, selectPackage, selectVariant } from './prompt';
 import { UP_TO_DATE, renderList } from './table';
-import { buildVariants } from './variants';
+import { type DiffVariant, buildVariants } from './variants';
 
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'),
@@ -40,6 +41,45 @@ program
   )
   .option('--name-only', 'show only the names of changed files')
   .parse();
+
+/**
+ * Offer the changed files of a diff in groups, and show the chosen group
+ * until the user goes back. Without a choice to make, the diff is shown
+ * right away.
+ */
+async function browseFiles(
+  dir: string,
+  name: string,
+  variant: DiffVariant,
+  options: DiffOptions,
+): Promise<void> {
+  const { from, to } = variant;
+  console.log(pc.dim(`Fetching file list for ${name} ${from} → ${to} ...`));
+  let files: string[];
+  try {
+    files = await listChangedFiles(dir, name, variant);
+  } catch {
+    // the full diff reports the failure
+    await showDiff(dir, name, variant, options);
+    return;
+  }
+
+  const groups = groupFiles(files);
+  // 'all' and a single other group leave nothing worth choosing
+  if (groups.length <= 2) {
+    await showDiff(dir, name, variant, options);
+    return;
+  }
+  let cursor = 0;
+  for (;;) {
+    const pick = await selectFileGroup(name, variant, groups, cursor);
+    if (!pick) {
+      return;
+    }
+    cursor = pick.index;
+    await showDiff(dir, name, variant, { ...options, files: pick.group.files });
+  }
+}
 
 async function main(): Promise<void> {
   const options = program.opts<CliOptions>();
@@ -74,17 +114,23 @@ async function main(): Promise<void> {
     }
     cursor = pick.index;
     const variants = buildVariants(pick.package);
-    const variant =
+    const variantPick =
       variants.length === 1
-        ? variants[0]
+        ? { variant: variants[0], files: false }
         : await selectVariant(pick.package, variants);
-    if (!variant) {
+    if (!variantPick) {
       continue;
     }
-    await showDiff(dir, pick.package.name, variant, {
+    const { variant } = variantPick;
+    const diffOptions = {
       unified: options.unified,
       nameOnly: options.nameOnly,
-    });
+    };
+    if ((pick.files || variantPick.files) && !options.nameOnly) {
+      await browseFiles(dir, pick.package.name, variant, diffOptions);
+    } else {
+      await showDiff(dir, pick.package.name, variant, diffOptions);
+    }
   }
 }
 
