@@ -11,6 +11,8 @@ import {
   useState,
 } from '@inquirer/core';
 import pc from 'picocolors';
+import type { VersionPair } from './diff';
+import type { FileGroup } from './files';
 import type { OutdatedPackage } from './outdated';
 import {
   type Colors,
@@ -25,16 +27,28 @@ export interface PackagePick {
   /** Display position of the package, to restore the cursor later */
   index: number;
   package: OutdatedPackage;
+  /** Selected with f, to choose the files of the diff */
+  files: boolean;
+}
+
+export interface VariantPick {
+  variant: DiffVariant;
+  /** Selected with f, to choose the files of the diff */
+  files: boolean;
 }
 
 const PACKAGE_MESSAGE =
-  'Choose a package to diff (↑/↓ or j/k move, enter select, q quit)';
+  'Choose a package to diff (↑/↓ or j/k move, enter select, f files, q quit)';
 const CURSOR = '❯ ';
 const NO_CURSOR = '  ';
 
 /** Lines available for the list, keeping legend and prompt line visible */
 function pageSize(): number {
   return Math.max(5, (process.stdout.rows || 24) - 8);
+}
+
+function isFilesKey(key: KeypressEvent): boolean {
+  return key.name === 'f';
 }
 
 function isQuitKey(key: KeypressEvent): boolean {
@@ -67,8 +81,12 @@ const packagePrompt = createPrompt<PackagePick | null, PackagePromptConfig>(
     const prefix = usePrefix({});
 
     useKeypress((key) => {
-      if (isEnterKey(key)) {
-        done({ index: cursor, package: order[cursor] });
+      if (isEnterKey(key) || isFilesKey(key)) {
+        done({
+          index: cursor,
+          package: order[cursor],
+          files: isFilesKey(key),
+        });
       } else if (isQuitKey(key)) {
         done(null);
       } else if (isPrevKey(key)) {
@@ -129,7 +147,7 @@ interface VariantPromptConfig {
   colors: Colors;
 }
 
-const variantPrompt = createPrompt<DiffVariant | null, VariantPromptConfig>(
+const variantPrompt = createPrompt<VariantPick | null, VariantPromptConfig>(
   (config, done) => {
     const { pkg, variants, colors: c } = config;
     const [cursor, setCursor] = useState(0);
@@ -137,8 +155,12 @@ const variantPrompt = createPrompt<DiffVariant | null, VariantPromptConfig>(
     const backIndex = variants.length;
 
     useKeypress((key) => {
-      if (isEnterKey(key)) {
-        done(cursor === backIndex ? null : variants[cursor]);
+      if (isEnterKey(key) || isFilesKey(key)) {
+        done(
+          cursor === backIndex
+            ? null
+            : { variant: variants[cursor], files: isFilesKey(key) },
+        );
       } else if (isQuitKey(key)) {
         done(null);
       } else if (isPrevKey(key)) {
@@ -165,8 +187,9 @@ const variantPrompt = createPrompt<DiffVariant | null, VariantPromptConfig>(
     });
     lines.push(`${cursor === backIndex ? CURSOR : NO_CURSOR}← back`);
 
+    const title = c.bold(`${pkg.name} ${pkg.current}: choose a diff`);
     return [
-      `${prefix} ${c.bold(`${pkg.name} ${pkg.current}: choose a diff`)}`,
+      `${prefix} ${title} ${c.dim('(f to choose files)')}`,
       ...lines,
     ].join('\n');
   },
@@ -179,10 +202,104 @@ const variantPrompt = createPrompt<DiffVariant | null, VariantPromptConfig>(
 export async function selectVariant(
   pkg: OutdatedPackage,
   variants: DiffVariant[],
-): Promise<DiffVariant | null> {
+): Promise<VariantPick | null> {
   try {
     return await variantPrompt(
       { pkg, variants, colors: pc },
+      { clearPromptOnDone: true },
+    );
+  } catch (err) {
+    if (err instanceof ExitPromptError) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+export interface FileGroupPick {
+  /** Position of the group, to restore the cursor later */
+  index: number;
+  group: FileGroup;
+}
+
+/** Menu rows for the file groups, without the cursor column */
+export function renderFileGroups(groups: FileGroup[]): string[] {
+  const labelWidth = Math.max(...groups.map((g) => g.label.length));
+  const countWidth = Math.max(
+    ...groups.map((g) => String(g.files.length).length),
+  );
+  return groups.map((group) => {
+    const n = group.files.length;
+    const count = `${String(n).padStart(countWidth)} ${n === 1 ? 'file' : 'files'}`;
+    return `${group.label.padEnd(labelWidth)}   ${count}`;
+  });
+}
+
+interface FileGroupPromptConfig {
+  title: string;
+  groups: FileGroup[];
+  cursor: number;
+  colors: Colors;
+}
+
+const fileGroupPrompt = createPrompt<
+  FileGroupPick | null,
+  FileGroupPromptConfig
+>((config, done) => {
+  const { groups, colors: c } = config;
+  const backIndex = groups.length;
+  const [cursor, setCursor] = useState(
+    Math.max(0, Math.min(config.cursor, backIndex)),
+  );
+  const prefix = usePrefix({});
+
+  useKeypress((key) => {
+    if (isEnterKey(key)) {
+      done(
+        cursor === backIndex ? null : { index: cursor, group: groups[cursor] },
+      );
+    } else if (isQuitKey(key)) {
+      done(null);
+    } else if (isPrevKey(key)) {
+      setCursor(Math.max(0, cursor - 1));
+    } else if (isNextKey(key)) {
+      setCursor(Math.min(backIndex, cursor + 1));
+    }
+  });
+
+  const rows = renderFileGroups(groups).map(
+    (row, i) => `${i === cursor ? CURSOR : NO_CURSOR}${row}`,
+  );
+  rows.push(`${cursor === backIndex ? CURSOR : NO_CURSOR}← back`);
+  const page = usePagination({
+    items: rows,
+    active: cursor,
+    renderItem: ({ item }) => item,
+    pageSize: pageSize(),
+    loop: false,
+  });
+
+  return `${prefix} ${c.bold(config.title)}\n${page}`;
+});
+
+/**
+ * Let the user pick which changed files of a diff to show. Resolves with
+ * null on back, q, escape, or ctrl-c.
+ */
+export async function selectFileGroup(
+  name: string,
+  { from, to }: VersionPair,
+  groups: FileGroup[],
+  cursor = 0,
+): Promise<FileGroupPick | null> {
+  try {
+    return await fileGroupPrompt(
+      {
+        title: `${name} ${from} → ${to}: choose files`,
+        groups,
+        cursor,
+        colors: pc,
+      },
       { clearPromptOnDone: true },
     );
   } catch (err) {

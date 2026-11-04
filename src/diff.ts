@@ -4,6 +4,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { Readable } from 'node:stream';
 import pc from 'picocolors';
+import { filterDiff, parseNameOnly } from './files';
+import { type Runner, runNpm } from './outdated';
 import type { DiffVariant } from './variants';
 
 export interface DiffOptions {
@@ -11,6 +13,8 @@ export interface DiffOptions {
   unified?: number;
   /** Only list changed files, passed as --diff-name-only */
   nameOnly?: boolean;
+  /** Show only these files, as npm diff names them */
+  files?: string[];
 }
 
 export type VersionPair = Pick<DiffVariant, 'from' | 'to'>;
@@ -29,6 +33,24 @@ export function buildNpmDiffArgs(
     args.push('--diff-name-only');
   }
   return args;
+}
+
+/**
+ * Names of the files that differ between two published versions of a
+ * package. Rejects when npm diff fails.
+ */
+export async function listChangedFiles(
+  dir: string,
+  name: string,
+  variant: VersionPair,
+  run: Runner = runNpm,
+): Promise<string[]> {
+  const args = buildNpmDiffArgs(name, variant, { nameOnly: true });
+  const { stdout, stderr, code } = await run(args, dir);
+  if (code !== 0) {
+    throw new Error(stderr.trim() || `npm diff failed (exit ${code})`);
+  }
+  return parseNameOnly(stdout);
 }
 
 /** Absolute path of the first executable called name on PATH, if any */
@@ -142,17 +164,23 @@ export async function showDiff(
   });
   const npmExit = track(npm);
 
-  // npm prints a lone newline when the versions do not differ
-  let hasOutput = false;
   let outputDone = false;
-  npm.stdout.on('data', (chunk: Buffer) => {
-    hasOutput ||= /\S/.test(chunk.toString('latin1'));
-  });
   npm.stdout.on('end', () => {
     outputDone = true;
   });
 
   let source: Readable = npm.stdout;
+  const filter = options.files && filterDiff(options.files);
+  if (filter) {
+    source = source.pipe(filter);
+  }
+
+  // npm prints a lone newline when the versions do not differ
+  let hasOutput = false;
+  source.on('data', (chunk: Buffer) => {
+    hasOutput ||= /\S/.test(chunk.toString('latin1'));
+  });
+
   if (fancy) {
     const child = spawn(fancy, [], { stdio: ['pipe', 'pipe', 'inherit'] });
     track(child);
@@ -185,6 +213,7 @@ export async function showDiff(
       child.stdout?.destroy();
       child.stdin?.destroy();
     }
+    filter?.destroy();
 
     if (killed) {
       return;
